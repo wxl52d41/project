@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:oracle:thin:@10.0.6.29:1521:orcl
+    url: jdbc:oracle:thin:@127.0.0.1:1521:orcl
     username: u_std_ads_pre
     password: aDsPre#test123
     driverClassName: oracle.jdbc.driver.OracleDriver

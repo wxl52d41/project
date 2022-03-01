@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wxl52d41.demo.mapper.OrdersMapper">
+
+<!--- ************************ 一对一 ***********************************-->
+   <!--
+        autoMapping = true
+        自动映射: 当javabean的属性名和结果集的字段名一致, 自动映射
+    -->
+    <!--
+        重点在: orders.user 属性 跟 结果集某一段(user表查出来)的映射
+            1. 一对一: association  (使用)
+            2. 一对多: collection
+
+        # association 标签
+            1. properties : 属性名
+            2. javaType : 此属性的类型
+
+           子标签 : 设置user和结果集之间的映射
+               注意 最左原则
+     -->
+    <resultMap id="myorder" type="orders" autoMapping="true">
+        <!--
+            id标签 : 主键字段映射(必须要写)
+            result标签: 非主键字段映射 (同名可不写,推荐写)
+        -->
+        <!--最左原则: 如果结果集中存在同名字段,默认使用左边的那个-->
+        <id property="id" column="id"/>
+        <!-- 写一个意思一下,其他两个字段不写 -->
+        <result property="ordertime" column="ordertime"/>
+        <association property="user" javaType="user" autoMapping="true">
+            <id property="id" column="uid"/>
+            <!--写一个意思一下-->
+            <result property="username" column="username"/>
+        </association>
+    </resultMap>
+    <!--
+        1. 直接写resultType=orders, 返回类型=orders
+        2. 要写成 resultMap : 结果集映射
+             指定查询结果集 跟 javabean (orders) 之间的映射关系
+    -->
+    <select id="findOrderByIdWithUser" resultMap="myorder">
+         select u.*,o.*
+         from orders o inner join user u on o.uid = u.id
+         where o.id = #{id}
+    </select>
+
+    <!--1. 直接写resultType=orders, 返回类型=orders
+            直接用orders作为返回对象，user会映射不出来导致结果不符合预期-->
+    <select id="findOrderByIdWithUser2" resultType="orders">
+         select u.*,o.*
+         from orders o inner join user uon o.uid = u.id
+         where o.id = #{id}
+    </select>
+
+
+    <!--*********************级联查询****************************-->
+    <!--
+            # 嵌套查询重点:
+                0. 目的
+                    select * from user where id = ?
+                        映射到 orders.user属性中
+                1. 编写查询user表的语句:
+                    UserMapper.findUserById -> UserMapper.xml
+                2. 嵌套到这里
+                    association标签的两个属性
+                        a. column : 条件 (结果集字段作为查询语句的参数)数据库表的列名或别名
+                         b. select : 调用第二句sql执行
+                            接口的权限定名.方法名
+                            UserMapper.findUserById(用户id)
+                注意：非关联字段可使用自动映射，关联字段映射（<result property="uid" column="uid"/>）
+                     是否省略会得到不同的结果。不建议省略。
+                     注意：association的column属性是当前类Orders对应表orders的外键列uid。
+    -->
+    <resultMap id="cascadeorder" type="orders" autoMapping="true">
+        <id property="id" column="id"/>
+        <result property="uid" column="uid"/>
+        <association property="user" javaType="user" autoMapping="true"
+                     column="uid"
+                     select="com.wxl52d41.demo.mapper.UserMapper.findUserById">
+        </association>
+    </resultMap>
+
+    <select id="findOrderByIdWithUser3" resultMap="cascadeorder">
+        select * from orders where id = #{id}
+    </select>
+
+
+ <select id="findOrdersByUid" resultType="orders">
+        select * from orders where uid = #{uid}
+    </select>
+
+</mapper>

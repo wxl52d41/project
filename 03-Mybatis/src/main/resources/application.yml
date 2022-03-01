@@ -1,0 +1,16 @@
+server:
+  port: 10088
+
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/mybatisTest?useUnicode=true&characterEncoding=utf8&allowMultiQueries=true&useSSL=false
+    username: root
+    password: wxlalt
+    driverClassName: com.mysql.jdbc.Driver
+
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:com/wxl52d41/demo/mapper/**/*.xml
+  type-aliases-package: com.wxl52d41.demo.entity

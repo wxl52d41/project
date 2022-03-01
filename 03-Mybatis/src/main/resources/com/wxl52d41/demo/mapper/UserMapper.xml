@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wxl52d41.demo.mapper.UserMapper">
+
+    <resultMap id="userMapper" type="user">
+        <id property="id" column="uid"/>
+        <result property="username" column="uname"/>
+        <result property="birthday" column="ubirth"/>
+        <result property="sex" column="sex"/>
+        <result property="address" column="address"/>
+    </resultMap>
+
+    <!--
+        # select标签的属性 : resultMap
+            1.resultType : 结果集的字段名和javabean属性名一致,推荐
+            2.resultMap  : 结果集的字段名和javabean属性名不一致 (多表)
+
+        # resultMap 标签 : 设置结果集映射到某个对象中
+            1. 属性
+                id : resultMap的id(唯一性)
+                type : resultMap的类型
+            2. 子标签
+                id子标签: 设置主键映射  (不论是否一致,必须要写)
+                result子标签: 非主键映射(如果一致,可以不写,推荐写)
+
+            3. 子标签属性
+                  property :   resultMap类型中的属性名
+                  column : sql结果集的列名(字段名)
+    -->
+<!--    <select id="findAllUsers" resultType="user">
+    SELECT
+	 id,username,birthday,sex,address
+	FROM
+    user
+    </select>-->
+    <select id="findAllUsers" resultMap="userMapper">
+    SELECT
+	 id,username,birthday,sex,address
+	FROM
+    user
+    </select>
+
+    <select id="findUsersByNameAndSex" resultType="user">
+         select *  from user where username = #{name} and sex = #{sex}
+    </select>
+
+    <select id="findUsersByNameAndSex2" resultType="user">
+        select *  from user where username = #{username} and sex = #{sex}
+    </select>
+
+    <!--
+        模糊查询
+        方案一: 不推荐, 耦合严重
+    -->
+    <select id="findUsersByKd1" resultType="user">
+           select * from user where username like #{keyword}
+    </select>
+
+    <!--
+       模糊查询，方式二【了解】
+           mysql5.5版本之前，此拼接不支持多个单引号
+           oracle数据库，除了别名的位置，其余位置都不能使用双引号
+    -->
+    <select id="findUsersByKd2" resultType="User">
+        select * from user where username like '%' #{keyword} '%'
+    </select>
+
+    <!--
+        模糊查询，方式三【此方式，会出现sql注入...】
+            ${} 字符串拼接，如果接收的简单数据类型，表达式名称必须是value
+    -->
+    <select id="findUsersByKd3"  resultType="User">
+        select * from user where username like '%${keyword}%'
+    </select>
+
+    <!--
+        模糊查询，方式四【掌握】
+            使用concat()函数拼接  : mysql函数可以多参数
+            注意：oracle数据库 concat()函数只能传递二个参数...  可以使用函数嵌套来解决
+                concat(concat('%',#{username}),'%');
+    -->
+    <select id="findUsersByKd4"  resultType="User">
+      select * from user where username like concat('%',#{username},'%')
+    </select>
+
+
+    <!--
+            方案一: 这表的主键必须是自增长的 auto_increment
+                 useGeneratedKeys="true" 让自增长的主键开启返回功能
+                 keyColumn="id"  user表中主键列
+                 keyProperty="id" user实体主键属性
+
+                 注意：支持主键自增类型的数据库 MySQL 和 SqlServer ， oracle不支持
+    -->
+    <insert id="addUser" useGeneratedKeys="true" keyColumn="id" keyProperty="id">
+         insert into user values(null,#{user.username},#{user.birthday},#{user.sex},#{user.address})
+    </insert>
+
+    <!--
+            方案二: <selectKey>
+             keyColumn="id" user表中主键列
+             keyProperty="id" user实体主键属性
+             resultType="int" user实体主键属性类型
+             order="AFTER"  表示此标签内部sql语句在insert执行之前（执行），还是之后执行（执行）
+                AFTER 之后执行【在自增主键时】
+                BEFORE 之前执行【使用指定主键时】
+    -->
+    <insert id="addUser2">
+        <selectKey keyColumn="id" keyProperty="id" resultType="int" order="AFTER">
+            SELECT LAST_INSERT_ID()
+        </selectKey>
+        insert into user values(null, #{username},#{birthday},#{sex},#{address})
+    </insert>
+
+
+
+    <!--
+        java 逻辑:
+            username = null;  都没有意义
+            username = "";
+
+            if(username != null && !username.equals("")){
+                 and username = ?
+            }
+      sql逻辑:
+           if标签: 必要属性test (写判断条件)
+                满足条件,拼接sql
+           where标签: 根据最终的条件,动态修改成合适的语法
+    -->
+    <select id="findUsersByIdAndUserNameIf" resultType="user">
+        select * from user
+        <where>
+            <if test="id != null and id != ''">
+                id = #{id}
+            </if>
+            <if test="username != null and username != ''">
+               and username = #{username}
+            </if>
+        </where>
+    </select>
+
+
+    <!--
+        set标签: 用在update语句中,动态修改sql语法
+    -->
+    <update id="updateUserById">
+        update user
+        <set>
+            <if test="username != null and username != ''">
+               username = #{username},
+            </if>
+            <if test="birthday != null and birthday != ''">
+                birthday = #{birthday},
+            </if>
+            <if test="sex != null and sex != ''">
+                sex = #{sex},
+            </if>
+            <if test="address != null and address != ''">
+                address = #{address}
+            </if>
+        </set>
+         where id = #{id}
+    </update>
+
+
+   <!--
+        foreach 标签(遍历)
+            1. collection属性: 被遍历的容器类型
+                list/array
+            2. item : 被遍历出来的元素
+            3. open: 遍历开始时的内容
+            4. close: 遍历结束的内容
+            5. separator : 每遍历一次就添加一次的分隔符(最后一次遍历不加)
+
+        距离: list = {1,2,3}
+             遍历: (1,2,3)
+    -->
+    <select id="findUsersByIds" resultType="user">
+        select * from user where id in
+        <foreach collection="list" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="findUsersByIds2" resultType="user">
+        select * from user where id in
+        <foreach collection="array" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </select>
+
+
+<!--- ************************ 一对多 ***********************************-->
+  <resultMap id="myuser" type="user" autoMapping="true">
+        <id property="id" column="id"/>
+        <!--
+            重点: user.list<Orders> list 属性 跟 结果集的一部分进行映射
+
+            关系: 一个用户对应多个订单 (一对多)
+                1. association : 一对一
+                2. collection : 一对多
+
+            # collection 标签
+                1. property : 指定属性名
+                2. ofType : 指定集合的元素类型
+
+             注意: 结果集同名字段的最左原则
+        -->
+        <collection property="list" ofType="orders" autoMapping="true">
+            <id property="id" column="oid"/>
+        </collection>
+    </resultMap>
+
+    <!--多表连接查询-->
+    <select id="findUserByIdWithOrders" resultMap="myuser">
+         select u.*,o.id as oid,o.uid,o.ordertime,o.money
+         from user u inner join orders o on u.id = o.uid
+         where u.id = #{uid}
+    </select>
+
+
+
+    <resultMap id="cascadeuser" type="user" autoMapping="true">
+        <id property="id" column="id"/>
+        <!--重点:
+                查询对应的订单信息  ->  user.list中
+                column : 条件(结果集字段作为查询语句的参数)
+                注意：collection的column属性是当前类User对应表user的主键列id。
+        -->
+        <collection property="list" ofType="orders" autoMapping="true"
+                    column="id"
+                    select="com.wxl52d41.demo.mapper.OrdersMapper.findOrdersByUid">
+        </collection>
+    </resultMap>
+
+    <select id="findUserByIdWithOrders2" resultMap="cascadeuser">
+         select * from user where user.id = #{uid}
+    </select>
+
+    <select id="findUserById" resultType="user">
+        select * from user where id = #{id}
+    </select>
+</mapper>

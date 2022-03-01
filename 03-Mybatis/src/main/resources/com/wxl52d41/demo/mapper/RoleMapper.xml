@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wxl52d41.demo.mapper.RoleMapper">
+
+<!--- ************************ 一对多 ***********************************-->
+    <resultMap id="myrole" type="role" autoMapping="true">
+        <id property="id" column="id"/>
+        <result property="rolesc" column="role_desc"/>
+
+        <collection property="list" ofType="user" autoMapping="true">
+            <id property="id" column="uid"/>
+        </collection>
+    </resultMap>
+    <select id="findRoleByIdWithUsers" resultMap="myrole">
+        select * from role r inner join user_role ur inner join user u
+	        on r.id = ur.rid and u.id = ur.uid
+		        where r.id = #{rid}
+    </select>
+
+</mapper>
