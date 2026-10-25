@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+logging:
+  level:
+    com.wxl52d41.apisign: INFO
+
+api:
+  sign:
+    enabled: true
+    # 接入方标识请求头
+    app-id-header: X-Sign-App-Id
+    apps:
+      # 第三方 A：HMAC-SHA256（推荐新接入方使用）
+      - app-id: thirdA
+        secret-key: thirdA-secret-key-please-change
+        digest-algo: hmac-sha256
+        timestamp-disparity: 300000
+        enabled: true
+      # 第三方 B：MD5 老口径（兼容存量）
+      - app-id: thirdB
+        secret-key: SwqFmsKxcbq23
+        digest-algo: md5
+        timestamp-disparity: 900000
+        enabled: true
+      # 第三方 C：已停用，用于验证停用拦截
+      - app-id: thirdC
+        secret-key: thirdC-secret-key
+        digest-algo: md5
+        enabled: false

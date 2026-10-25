@@ -1,0 +1,45 @@
+### 1. 获取签名示例（每次调用生成新的 timestamp/nonce/sign）
+GET http://localhost:8080/demo/create-demo
+
+### 2. 参数模式（query / form，三件套随表单提交，替换为 create-demo 生成的值）
+POST http://localhost:8080/demo/form-body
+Content-Type: application/x-www-form-urlencoded
+
+name=nzxy&age=18&timestamp=1740000000000&nonce=xxxxxx&sign=xxxxxx
+
+### 3. JSON body 模式（扁平，三件套放 header，替换为 create-demo 生成的值）
+POST http://localhost:8080/demo/json-body
+timestamp: 1740000000000
+nonce: xxxxxx
+sign: xxxxxx
+Content-Type: application/json
+
+{
+  "name": "nzxy",
+  "age": 18
+}
+
+### 4. JSON body 模式（嵌套展平，全部字段参与签名，替换为 create-demo 生成的值）
+POST http://localhost:8080/demo/json-nested
+timestamp: 1740000000000
+nonce: xxxxxx
+sign: xxxxxx
+Content-Type: application/json
+
+{
+  "user": {"name": "nzxy", "age": 18},
+  "remark": "参与签名"
+}
+
+### 5. JSON body 模式（includeParams 白名单：仅 name/age 参与签名）
+POST http://localhost:8080/demo/json-some-params
+timestamp: 1740000000000
+nonce: xxxxxx
+sign: xxxxxx
+Content-Type: application/json
+
+{
+  "name": "nzxy",
+  "age": 18,
+  "otherParam": "xxx 不参与签名，可任意修改"
+}

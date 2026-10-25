@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>apiSign 签名调试台</title>
+<script>
+  // 尽早应用主题，避免刷新时首屏白/深闪跳
+  (function () {
+    try {
+      var t = localStorage.getItem('apisign-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  })();
+</script>
+<style>
+  /* ============ 主题：通过 <html data-theme="light|dark|warm"> 切换 ============ */
+  :root, html[data-theme="light"] {
+    --bg: #f6f7f9; --panel: #ffffff; --panel2: #f8f9fb; --line: #e3e6ec;
+    --fg: #1f2329; --muted: #6b7280; --accent: #2563eb; --accent-fg: #ffffff;
+    --ok: #16a34a; --bad: #dc2626; --warn: #d97706;
+    --header-bg: #ffffff; --input-bg: #f8f9fb; --pre-fg: #374151;
+    --readonly-bg: #f3f4f6; --shadow: 0 1px 2px rgba(16,24,40,.04);
+    --ok-bg: rgba(22,163,74,.10); --bad-bg: rgba(220,38,38,.10); --warn-bg: rgba(217,119,6,.10);
+  }
+  html[data-theme="dark"] {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --line: #2a2f3a;
+    --fg: #e6e9ef; --muted: #8b94a7; --accent: #4f8cff; --accent-fg: #ffffff;
+    --ok: #38d39f; --bad: #ff6b6b; --warn: #ffb454;
+    --header-bg: #14171d; --input-bg: #1e222b; --pre-fg: #cfd6e4;
+    --readonly-bg: #232833; --shadow: none;
+    --ok-bg: rgba(56,211,159,.15); --bad-bg: rgba(255,107,107,.15); --warn-bg: rgba(255,180,84,.15);
+  }
+  html[data-theme="warm"] {
+    /* 暖色：米黄纸感 + 琥珀强调 */
+    --bg: #faf6ef; --panel: #fffdf8; --panel2: #f7f1e6; --line: #e8dcc8;
+    --fg: #3a2e22; --muted: #8a7a66; --accent: #c2703d; --accent-fg: #ffffff;
+    --ok: #4f7d3f; --bad: #b4453a; --warn: #b8802a;
+    --header-bg: #fdf8f0; --input-bg: #fbf6ec; --pre-fg: #5b4a38;
+    --readonly-bg: #f2ebdd; --shadow: 0 1px 2px rgba(120,90,50,.06);
+    --ok-bg: rgba(79,125,63,.12); --bad-bg: rgba(180,69,58,.12); --warn-bg: rgba(184,128,42,.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg); font-size: 13px;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    transition: background-color .18s ease, color .18s ease;
+  }
+  header {
+    padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--header-bg);
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header .spacer { flex: 1; }
+  /* 主题切换按钮 */
+  .theme-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .theme-switch button {
+    background: transparent; color: var(--muted); border: 0; border-radius: 0;
+    padding: 6px 11px; font-size: 12px; cursor: pointer; font-weight: 500;
+  }
+  .theme-switch button + button { border-left: 1px solid var(--line); }
+  .theme-switch button:hover { color: var(--accent); background: var(--panel2); }
+  .theme-switch button.active { background: var(--accent); color: var(--accent-fg); }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px 40px; }
+  @media (max-width: 1100px) { .wrap { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px; box-shadow: var(--shadow);
+    transition: background-color .18s ease, border-color .18s ease;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 12px; color: var(--muted); font-weight: 600; letter-spacing: .3px; }
+  label { display: block; color: var(--muted); margin: 10px 0 4px; font-size: 12px; }
+  input, select, textarea {
+    width: 100%; background: var(--input-bg); border: 1px solid var(--line); color: var(--fg);
+    border-radius: 6px; padding: 7px 9px; font-size: 12.5px; outline: none;
+    font-family: ui-monospace, Consolas, "Courier New", monospace;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); background: var(--panel); }
+  input[readonly] { color: var(--muted); background: var(--readonly-bg); }
+  textarea { resize: vertical; min-height: 130px; line-height: 1.5; }
+  button {
+    background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 6px;
+    padding: 8px 14px; font-size: 12.5px; cursor: pointer; font-weight: 500;
+  }
+  button:hover { filter: brightness(1.08); }
+  button.ghost { background: var(--panel); border: 1px solid var(--line); color: var(--fg); }
+  button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .kv { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  pre {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px; overflow: auto; max-height: 260px; margin: 8px 0 0;
+    white-space: pre-wrap; word-break: break-all; font-size: 12px; line-height: 1.55;
+    color: var(--pre-fg);
+  }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tab {
+    padding: 6px 11px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--muted); cursor: pointer; font-size: 12px;
+  }
+  .tab:hover { border-color: var(--accent); color: var(--accent); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.bad { background: var(--bad-bg); color: var(--bad); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .hint { color: var(--muted); font-size: 11.5px; line-height: 1.6; margin-top: 6px; }
+  .sep { height: 1px; background: var(--line); margin: 14px 0; }
+  .mono-sm { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: var(--muted); }
+  /* 参数模式键值对行 */
+  .kv-row { display: grid; grid-template-columns: 1fr 1.2fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .kv-row input { padding: 6px 9px; }
+  .kv-del {
+    background: transparent; border: 1px solid var(--line); color: var(--muted);
+    padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; line-height: 1;
+  }
+  .kv-del:hover { border-color: var(--bad); color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>apiSign 签名调试台</h1>
+  <span class="sub">@ApiSign 双模式验签 · 参数模式 / JSON body 模式</span>
+  <span id="selfTest" class="badge warn">算法自检中…</span>
+  <span class="spacer"></span>
+  <div class="theme-switch" role="group" aria-label="主题切换">
+    <button type="button" data-theme-set="light">白色</button>
+    <button type="button" data-theme-set="dark">深色</button>
+    <button type="button" data-theme-set="warm">暖色</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- ============ 左：请求构造 ============ -->
+  <div>
+    <div class="card">
+      <h2>① 接口与密钥</h2>
+      <div class="grid2">
+        <div>
+          <label>服务地址</label>
+          <input id="baseUrl" value="http://localhost:8080">
+        </div>
+        <div>
+          <label>接入方 appId（请求头 X-Sign-App-Id）</label>
+          <select id="appId">
+            <option value="thirdA" selected>thirdA（hmac-sha256）</option>
+            <option value="thirdB">thirdB（md5）</option>
+            <option value="thirdC">thirdC（已停用，验证拦截）</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label>secretKey（须与该 appId 配置一致）</label>
+          <input id="secretKey" value="thirdA-secret-key-please-change">
+        </div>
+        <div>
+          <label>摘要算法</label>
+          <select id="algo">
+            <option value="md5">md5</option>
+            <option value="sha256">sha256</option>
+            <option value="hmac-md5">hmac-md5</option>
+            <option value="hmac-sha256" selected>hmac-sha256</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label>目标接口</label>
+          <select id="endpoint">
+            <option value="/demo/form-body">参数模式 /demo/form-body</option>
+            <option value="/demo/json-body" selected>JSON 扁平 /demo/json-body</option>
+            <option value="/demo/json-nested">JSON 嵌套 /demo/json-nested</option>
+            <option value="/demo/json-some-params">白名单 /demo/json-some-params</option>
+            <option value="/demo/only-third-a">仅 thirdA /demo/only-third-a</option>
+            <option value="/demo/form/query">GET query /demo/form/query</option>
+            <option value="/demo/form/urlencoded">表单 /demo/form/urlencoded</option>
+            <option value="/demo/form/path/{goodsId}">路径参数 /demo/form/path/{goodsId}</option>
+            <option value="/demo/form/multi-value">多值参数 /demo/form/multi-value</option>
+            <option value="/demo/form/chinese">中文参数 /demo/form/chinese</option>
+            <option value="/demo/form/json-put">PUT JSON /demo/form/json-put</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint" id="modeHint"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2 id="paramCardTitle">② 业务参数</h2>
+      <div class="tabs">
+        <button class="tab active" data-preset="flat">扁平 {name,age}</button>
+        <button class="tab" data-preset="nested">嵌套 {user:{...}}</button>
+        <button class="tab" data-preset="whitelist">白名单 + otherParam</button>
+        <button class="tab" data-preset="array">含数组/布尔/浮点</button>
+      </div>
+
+      <!-- 参数模式：键值对输入（query/form） -->
+      <div id="kvEditor" style="display:none">
+        <label>请求参数（query / form，会与 timestamp、nonce、sign 一起提交）</label>
+        <div id="kvRows"></div>
+        <div class="row">
+          <button id="btnAddKv" class="ghost" type="button">+ 添加参数</button>
+        </div>
+      </div>
+
+      <!-- JSON 模式：整段 JSON -->
+      <div id="jsonEditor">
+        <label>JSON 请求体（body 原样提交，自动展平后参与签名）</label>
+        <textarea id="payload" spellcheck="false">{
+  "name": "nzxy",
+  "age": 18
+}</textarea>
+      </div>
+
+      <div class="row">
+        <label style="margin:0"><input type="checkbox" id="includeParams" style="width:auto;margin-right:6px">按接口 includeParams 过滤签名参数</label>
+      </div>
+      <div class="hint" id="payloadHint"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>③ 签名三件套（自动生成）</h2>
+      <div class="row">
+        <button id="btnResign" class="ghost">重新生成 timestamp / nonce / sign</button>
+        <button id="btnSend">发送请求</button>
+        <button id="btnFreeze" class="ghost">锁定签名（模拟中间人篡改）</button>
+      </div>
+      <div class="hint" id="freezeHint" style="display:none">
+        签名已锁定：此时修改上方业务参数或路径，签名不会重算，可验证服务端能否拦截篡改。
+        再次点击「锁定签名」或「重新生成」解除。
+      </div>
+      <label>timestamp</label>
+      <input id="ts" readonly>
+      <label>nonce</label>
+      <input id="nonce" readonly>
+      <label>sign</label>
+      <input id="sign" readonly>
+      <div class="sep"></div>
+      <label>参与签名的参数（字典序拼接结果）</label>
+      <pre id="fullStr" style="max-height:120px"></pre>
+    </div>
+  </div>
+
+  <!-- ============ 右：响应 ============ -->
+  <div>
+    <div class="card">
+      <h2>④ 响应</h2>
+      <div class="row" style="margin-top:0">
+        <span id="statusBadge" class="badge warn">未发送</span>
+        <span class="mono-sm" id="elapsed"></span>
+      </div>
+      <pre id="respBody">等待发送…</pre>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>⑤ 实际发出的请求（可复制到 curl / .http）</h2>
+      <pre id="reqDump">—</pre>
+      <div class="row">
+        <button id="btnCopyCurl" class="ghost">复制 curl</button>
+        <button id="btnCopyHttp" class="ghost">复制 .http</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>⑥ 算法对照（与 Java 服务端同口径）</h2>
+      <div class="hint" style="margin-top:0">
+        固定 timestamp=1740000000000 / nonce=abc 时的期望值，点击校验当前实现是否正确：
+      </div>
+      <pre id="vectors" style="max-height:200px">—</pre>
+      <div class="row">
+        <button id="btnVerify" class="ghost">跑一遍对照用例</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+ * 1. MD5（纯 JS，UTF-8，输出小写十六进制）——与 Java DigestUtils.md5 一致
+ * ========================================================================= */
+const MD5 = (function () {
+  const S = [7,12,17,22, 5,9,14,20, 4,11,16,23, 6,10,15,21];
+  const K = new Array(64);
+  for (let i = 0; i < 64; i++) K[i] = Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296) | 0;
+
+  function rotl(x, c) { return (x << c) | (x >>> (32 - c)); }
+
+  function utf8Bytes(str) {
+    const out = [];
+    for (let i = 0; i < str.length; i++) {
+      let c = str.charCodeAt(i);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) {
+        out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+      } else if (c >= 0xd800 && c <= 0xdbff) {
+        const c2 = str.charCodeAt(++i);
+        const cp = 0x10000 + ((c - 0xd800) << 10) + (c2 - 0xdc00);
+        out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f),
+                 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+      } else {
+        out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+      }
+    }
+    return out;
+  }
+
+  function toHex(n) {
+    let s = "";
+    for (let i = 0; i < 4; i++) s += ((n >>> (i * 8)) & 0xff).toString(16).padStart(2, "0");
+    return s;
+  }
+
+  /**
+   * 核心：对字节数组做 MD5（HMAC-MD5 需要直接喂字节数组，避免二次 UTF-8 编码）
+   */
+  function digestBytes(msg) {
+    const bitLen = msg.length * 8;
+    // padding
+    const withPad = msg.slice();
+    withPad.push(0x80);
+    while (withPad.length % 64 !== 56) withPad.push(0);
+    // length little-endian 64bit
+    for (let i = 0; i < 8; i++) withPad.push((i < 4) ? ((bitLen >>> (i * 8)) & 0xff) : 0);
+
+    let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+    const M = new Array(16);
+
+    for (let off = 0; off < withPad.length; off += 64) {
+      for (let i = 0; i < 16; i++) {
+        M[i] = withPad[off + i * 4] | (withPad[off + i * 4 + 1] << 8) |
+               (withPad[off + i * 4 + 2] << 16) | (withPad[off + i * 4 + 3] << 24);
+      }
+      let A = a0, B = b0, C = c0, D = d0;
+      for (let i = 0; i < 64; i++) {
+        let F, g;
+        if (i < 16) { F = (B & C) | (~B & D); g = i; }
+        else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+        else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+        else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+        F = (F + A + K[i] + M[g]) | 0;
+        A = D; D = C; C = B;
+        B = (B + rotl(F, S[(i >> 4) * 4 + (i % 4)])) | 0;
+      }
+      a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+    }
+    return toHex(a0) + toHex(b0) + toHex(c0) + toHex(d0);
+  }
+
+  function md5(str) {
+    return digestBytes(utf8Bytes(str));
+  }
+
+  md5.digestBytes = digestBytes;
+  md5.utf8Bytes = utf8Bytes;
+  return md5;
+})();
+
+/* =========================================================================
+ * 2. SHA-256 / HMAC-SHA256（纯 JS）——与 Java DigestUtils.sha256 / hmacSha256 一致
+ * ========================================================================= */
+
+/**
+ * 字符串 -> UTF-8 字节数组（正确处理中文/代理对，替代已废弃的 unescape 技巧）
+ */
+function utf8Array(str) {
+  const out = [];
+  for (let i = 0; i < str.length; i++) {
+    let c = str.charCodeAt(i);
+    if (c < 0x80) {
+      out.push(c);
+    } else if (c < 0x800) {
+      out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      // 代理对：合成完整码点后按 4 字节编码
+      const c2 = str.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (c2 - 0xdc00);
+      out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f),
+               0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+    } else {
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+  }
+  return out;
+}
+
+const SHA256 = (function () {
+  const K = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  function rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+
+  function pad(msg) {
+    const bytes = msg.slice();
+    const bitLenHi = Math.floor(msg.length / 536870912);
+    const bitLenLo = (msg.length * 8) >>> 0;
+    bytes.push(0x80);
+    while (bytes.length % 64 !== 56) bytes.push(0);
+    for (let i = 3; i >= 0; i--) bytes.push((bitLenHi >>> (i * 8)) & 0xff);
+    for (let i = 3; i >= 0; i--) bytes.push((bitLenLo >>> (i * 8)) & 0xff);
+    return bytes;
+  }
+
+  /**
+   * 核心：对 UTF-8 字节数组做 SHA-256，输出小写十六进制。
+   * HMAC 需要直接喂字节数组（pad 后的 ipad/opad 块含 >127 的字节，
+   * 若先转字符串再编码会被二次 UTF-8 编码，结果错误），故单独暴露。
+   */
+  function digestBytes(msgBytes) {
+    const msg = pad(msgBytes);
+    let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    const w = new Array(64);
+    for (let off = 0; off < msg.length; off += 64) {
+      for (let i = 0; i < 16; i++) {
+        w[i] = (msg[off+i*4] << 24) | (msg[off+i*4+1] << 16) | (msg[off+i*4+2] << 8) | msg[off+i*4+3];
+      }
+      for (let i = 16; i < 64; i++) {
+        const s0 = rotr(w[i-15],7) ^ rotr(w[i-15],18) ^ (w[i-15] >>> 3);
+        const s1 = rotr(w[i-2],17) ^ rotr(w[i-2],19) ^ (w[i-2] >>> 10);
+        w[i] = (w[i-16] + s0 + w[i-7] + s1) | 0;
+      }
+      let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (let i = 0; i < 64; i++) {
+        const S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+        const ch = (e & f) ^ (~e & g);
+        const t1 = (h + S1 + ch + K[i] + w[i]) | 0;
+        const S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+        const maj = (a & b) ^ (a & c) ^ (b & c);
+        const t2 = (S0 + maj) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0;
+        d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      H[0] = (H[0]+a)|0; H[1] = (H[1]+b)|0; H[2] = (H[2]+c)|0; H[3] = (H[3]+d)|0;
+      H[4] = (H[4]+e)|0; H[5] = (H[5]+f)|0; H[6] = (H[6]+g)|0; H[7] = (H[7]+h)|0;
+    }
+    return H.map(x => (x >>> 0).toString(16).padStart(8, "0")).join("");
+  }
+
+  function sha256(str) {
+    return digestBytes(utf8Array(str));
+  }
+
+  sha256.digestBytes = digestBytes;
+  return sha256;
+})();
+
+/**
+ * 通用 HMAC：digestFn 为字节数组 -> 十六进制字符串的内核函数
+ * 与 Java DigestUtils.hmacDigest(key, data, algorithm) 同口径
+ */
+function hmacGeneric(key, data, digestFn) {
+  const blockSize = 64;
+  let kb = utf8Array(key);
+  // 密钥超过块大小先 hash，否则右侧补零到 64 字节
+  if (kb.length > blockSize) {
+    kb = digestFn(kb).match(/.{2}/g).map(x => parseInt(x, 16));
+  }
+  while (kb.length < blockSize) kb.push(0);
+  const ipad = kb.map(b => b ^ 0x36);
+  const opad = kb.map(b => b ^ 0x5c);
+  // 直接拼接字节数组，避免"字节->字符串->再 UTF-8 编码"造成的二次编码
+  const inner = digestFn(ipad.concat(utf8Array(data)));
+  const innerBytes = inner.match(/.{2}/g).map(h => parseInt(h, 16));
+  return digestFn(opad.concat(innerBytes));
+}
+
+function hmacMd5(key, data) {
+  return hmacGeneric(key, data, MD5.digestBytes);
+}
+
+function hmacSha256(key, data) {
+  return hmacGeneric(key, data, SHA256.digestBytes);
+}
+
+/* =========================================================================
+ * 3. 展平（与服务端 SignParamResolver 完全同口径）
+ *    {a:{b:1}} -> a.b=1 ; {a:["x","y"]} -> a[0]=x&a[1]=y ; null 跳过
+ *    数字/布尔按 String() 语义：18->"18" 1.5->"1.5" true->"true"
+ * ========================================================================= */
+function flattenJson(obj, prefix, out) {
+  out = out || {};
+  prefix = prefix || "";
+  if (obj === null || obj === undefined) return out;
+  if (Array.isArray(obj)) {
+    for (let i = 0; i < obj.length; i++) flattenJson(obj[i], prefix + "[" + i + "]", out);
+  } else if (typeof obj === "object") {
+    const keys = Object.keys(obj);
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      flattenJson(obj[k], prefix === "" ? k : prefix + "." + k, out);
+    }
+  } else {
+    out[prefix] = String(obj);
+  }
+  return out;
+}
+
+/* =========================================================================
+ * 4. 签名（与方法 SignTemplate.createSign 完全同口径）
+ *    paramsStr = 全部参与参数（含 timestamp/nonce，不含 sign）按字典序 k=v 用 & 拼接
+ *    非 HMAC: md5/sha(paramsStr + "&key=" + secretKey)
+ *    HMAC   : hmac(secretKey, paramsStr)
+ * ========================================================================= */
+function joinParamsDictSort(map) {
+  const keys = Object.keys(map).sort();          // 默认按 UTF-16 码元排序，等价 TreeMap 字典序（ASCII 场景）
+  const parts = [];
+  for (const k of keys) {
+    const v = map[k];
+    if (v === null || v === undefined || v === "") continue;   // 与服务端 isEmpty 跳过一致
+    parts.push(k + "=" + v);
+  }
+  return parts.join("&");
+}
+
+function createSign(params, secretKey, algo) {
+  const paramsStr = joinParamsDictSort(params);
+  let fullStr, sign;
+  if (algo && algo.indexOf("hmac-") === 0) {
+    fullStr = paramsStr;
+    // HMAC 系列：密钥参与 HMAC 运算，不拼接在 fullStr 中
+    if (algo === "hmac-md5") {
+      sign = hmacMd5(secretKey, paramsStr);
+    } else {
+      sign = hmacSha256(secretKey, paramsStr);
+    }
+  } else {
+    fullStr = paramsStr + "&key=" + secretKey;
+    sign = (algo === "sha256") ? SHA256(fullStr) : MD5(fullStr);
+  }
+  return { paramsStr, fullStr, sign };
+}
+
+function randomString(len) {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const buf = new Uint8Array(len);
+  crypto.getRandomValues(buf);
+  let s = "";
+  for (let i = 0; i < len; i++) s += chars[buf[i] % 62];
+  return s;
+}
+
+/* =========================================================================
+ * 5. UI 逻辑
+ * ========================================================================= */
+const $ = id => document.getElementById(id);
+
+/**
+ * 接入方配置：与 sample application.yml 保持一致
+ * 切换 appId 时自动联动密钥与算法
+ */
+const APPS = {
+  thirdA: { secretKey: "thirdA-secret-key-please-change", algo: "hmac-sha256" },
+  thirdB: { secretKey: "SwqFmsKxcbq23", algo: "md5" },
+  thirdC: { secretKey: "thirdC-secret-key", algo: "md5" }
+};
+
+const PRESETS = {
+  flat:      { body: { name: "nzxy", age: 18 }, endpoint: "/demo/json-body" },
+  nested:    { body: { user: { name: "nzxy", age: 18 }, remark: "参与签名" }, endpoint: "/demo/json-nested" },
+  whitelist: { body: { name: "nzxy", age: 18, otherParam: "任意修改" }, endpoint: "/demo/json-some-params" },
+  array:     { body: { tags: ["a", "b"], score: 1.5, vip: true, note: null }, endpoint: "/demo/json-body" }
+};
+
+/**
+ * 各入参形态接口的默认参数，切换接口时自动填充
+ */
+const ENDPOINT_PARAMS = {
+  "/demo/form-body":           { name: "nzxy", age: "18" },
+  "/demo/form/query":          { name: "nzxy", age: "18" },
+  "/demo/form/urlencoded":     { name: "nzxy", age: "18" },
+  "/demo/form/path/{goodsId}": { goodsId: "G001", name: "nzxy" },
+  "/demo/form/multi-value":    { tags: "a" },
+  "/demo/form/chinese":        { name: "张三", remark: "测试&特殊=字符" },
+  "/demo/form/json-put":       { name: "nzxy", age: 18 }
+};
+
+let lastRequest = null;
+
+/**
+ * 签名冻结状态：非 null 时锁定三件套，修改业务参数不重算签名
+ */
+let frozen = null;
+
+function currentEndpoint() { return $("endpoint").value; }
+function currentAppId() { return $("appId").value; }
+
+// 参数模式接口：走 query / form，三件套在参数里
+const PARAM_MODE_ENDPOINTS = [
+  "/demo/form-body",
+  "/demo/form/query",
+  "/demo/form/urlencoded",
+  "/demo/form/path/{goodsId}",
+  "/demo/form/multi-value",
+  "/demo/form/chinese"
+];
+
+function isJsonMode() {
+  // 与服务端判定一致：Content-Type 是否为 application/json
+  return PARAM_MODE_ENDPOINTS.indexOf(currentEndpoint()) === -1;
+}
+
+// PUT 接口需要用 PUT 方法
+function httpMethod() {
+  return currentEndpoint() === "/demo/form/json-put" ? "PUT" : "POST";
+}
+
+// GET 接口（query 参数）
+function isGetEndpoint() {
+  const ep = currentEndpoint();
+  return ep === "/demo/form/query" || ep === "/demo/form/path/{goodsId}"
+      || ep === "/demo/form/multi-value" || ep === "/demo/form/chinese";
+}
+
+// 该接口是否有路径参数
+function pathParamName() {
+  return currentEndpoint() === "/demo/form/path/{goodsId}" ? "goodsId" : null;
+}
+
+function endpointIncludeParams() {
+  // 与服务端 @ApiSign(includeParams = {"name","age"}) 对应
+  return currentEndpoint() === "/demo/json-some-params" ? ["name", "age"] : null;
+}
+
+function updateModeHint() {
+  const ep = currentEndpoint();
+  const jsonMode = isJsonMode();
+
+  // 参数模式显示键值对编辑器，JSON 模式显示 JSON 文本框
+  $("kvEditor").style.display = jsonMode ? "none" : "block";
+  $("jsonEditor").style.display = jsonMode ? "block" : "none";
+  $("paramCardTitle").textContent = jsonMode ? "② 业务参数（JSON body）" : "② 业务参数（query / form 参数）";
+
+  if (ep === "/demo/form-body") {
+    $("modeHint").innerHTML = '参数模式：参数与 <code>timestamp/nonce/sign</code> 全部走 form。';
+    $("payloadHint").innerHTML = '每行一个参数名 + 参数值，与三件套一起作为 form 参数提交。';
+  } else if (ep === "/demo/form/query") {
+    $("modeHint").innerHTML = 'GET + query 参数：所有参数拼在 URL 上。';
+    $("payloadHint").innerHTML = '每行一个参数名 + 参数值，作为 query 参数提交。';
+  } else if (ep === "/demo/form/urlencoded") {
+    $("modeHint").innerHTML = 'POST + application/x-www-form-urlencoded 表单。';
+    $("payloadHint").innerHTML = '每行一个参数名 + 参数值，作为表单字段提交。';
+  } else if (ep === "/demo/form/path/{goodsId}") {
+    $("modeHint").innerHTML = '路径参数 <code>goodsId</code> 也会参与签名，<strong>篡改路径会导致验签失败</strong>。';
+    $("payloadHint").innerHTML = '必须包含 goodsId 一行（同时作为路径和签名参数），其余作为 query 参数。';
+  } else if (ep === "/demo/form/multi-value") {
+    $("modeHint").innerHTML = '多值参数：同名参数出现多次，服务端取<strong>首个值</strong>参与签名。';
+    $("payloadHint").innerHTML = '填写 tags=a，页面会发送 tags=a&tags=b，签名覆盖首值 a。';
+  } else if (ep === "/demo/form/chinese") {
+    $("modeHint").innerHTML = '中文与特殊字符：验证 URL 编码后的验签一致性。';
+    $("payloadHint").innerHTML = '可填写中文值，页面自动 URL 编码。';
+  } else if (ep === "/demo/form/json-put") {
+    $("modeHint").innerHTML = 'PUT 方法 + JSON body，验签逻辑与 POST JSON 一致。';
+    $("payloadHint").innerHTML = 'JSON body 原样提交，三件套走 header。';
+  } else if (ep === "/demo/only-third-a") {
+    $("modeHint").innerHTML = '接口级授权：仅 <code>thirdA</code> 可访问，其他 appId 会返回 12210。';
+    $("payloadHint").innerHTML = '切换上方 appId 为 thirdB 可验证越权拦截。';
+  } else if (ep === "/demo/json-some-params") {
+    $("modeHint").innerHTML = 'JSON 模式 + 白名单：仅 <code>name/age</code> 参与签名，<code>otherParam</code> 可任意篡改。';
+    $("payloadHint").innerHTML = 'JSON body 原样提交，三件套走 header；仅 name/age 参与签名。';
+  } else {
+    $("modeHint").innerHTML = 'JSON 模式：body 扁平化后参与签名，三件套走 <code>header</code>。';
+    $("payloadHint").innerHTML = 'JSON body 原样提交，三件套走 header；嵌套对象会按 <code>a.b</code> 展平后参与签名。';
+  }
+}
+
+/* ---------------- 参数模式：键值对编辑器 ---------------- */
+
+/**
+ * 追加一行键值输入
+ */
+function addKvRow(k, v) {
+  const row = document.createElement("div");
+  row.className = "kv-row";
+
+  const keyInput = document.createElement("input");
+  keyInput.type = "text";
+  keyInput.placeholder = "参数名";
+  keyInput.value = (k === undefined || k === null) ? "" : k;
+
+  const valInput = document.createElement("input");
+  valInput.type = "text";
+  valInput.placeholder = "参数值";
+  valInput.value = (v === undefined || v === null) ? "" : v;
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "kv-del";
+  del.textContent = "删除";
+  del.addEventListener("click", () => { row.remove(); refreshTriple(); });
+
+  keyInput.addEventListener("input", refreshTriple);
+  valInput.addEventListener("input", refreshTriple);
+
+  row.appendChild(keyInput);
+  row.appendChild(valInput);
+  row.appendChild(del);
+  $("kvRows").appendChild(row);
+}
+
+/**
+ * 用一组对象重置键值对编辑器
+ */
+function setKvRows(obj) {
+  $("kvRows").innerHTML = "";
+  const keys = Object.keys(obj || {});
+  if (keys.length === 0) {
+    addKvRow("", "");
+    return;
+  }
+  keys.forEach(k => addKvRow(k, obj[k]));
+}
+
+/**
+ * 读取键值对编辑器为参数对象（跳过空参数名）
+ */
+function readKvRows() {
+  const out = {};
+  $("kvRows").querySelectorAll(".kv-row").forEach(row => {
+    const inputs = row.querySelectorAll("input");
+    const k = inputs[0].value.trim();
+    if (k === "") return;
+    out[k] = inputs[1].value;
+  });
+  return out;
+}
+
+function computeTriple() {
+  const secretKey = $("secretKey").value;
+  const algo = $("algo").value;
+  const jsonMode = isJsonMode();
+  const ep = currentEndpoint();
+
+  let params = {};
+  let body = null;
+
+  if (jsonMode) {
+    let parsed;
+    try {
+      parsed = JSON.parse($("payload").value);
+    } catch (e) {
+      return { error: "JSON 解析失败：" + e.message };
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { error: "请求体必须是 JSON 对象（服务端会拒绝数组/标量）" };
+    }
+    body = parsed;
+    params = flattenJson(body, "", {});
+  } else {
+    params = readKvRows();
+    if (Object.keys(params).length === 0) {
+      return { error: "请至少填写一个请求参数" };
+    }
+  }
+
+  // 白名单过滤（服务端 includeParams；timestamp/nonce/sign 强制保留）
+  if ($("includeParams").checked) {
+    const inc = endpointIncludeParams();
+    if (inc) {
+      const filtered = {};
+      for (const k of Object.keys(params)) {
+        if (inc.indexOf(k) !== -1) filtered[k] = params[k];
+      }
+      params = filtered;
+    }
+  }
+
+  // 签名冻结：模拟中间人拿到合法签名后篡改数据，
+  // 此时三件套与签名不再重算，只替换业务参数，用于验证服务端能否拦截
+  if (frozen) {
+    return {
+      ts: frozen.ts, nonce: frozen.nonce, sign: frozen.sign,
+      paramsStr: frozen.paramsStr, fullStr: frozen.fullStr,
+      params, body,
+      frozenNote: "签名已锁定，当前业务参数未参与本次签名计算"
+    };
+  }
+
+  // 补三件套（timestamp/nonce 参与签名）
+  const ts = String(Date.now());
+  const nonce = randomString(32);
+  params.timestamp = ts;
+  params.nonce = nonce;
+
+  const r = createSign(params, secretKey, algo);
+  return { ts, nonce, sign: r.sign, paramsStr: r.paramsStr, fullStr: r.fullStr, params, body };
+}
+
+/**
+ * 展示三件套与签名输入
+ */
+function renderTriple(r) {
+  if (r.error) {
+    $("ts").value = "";
+    $("nonce").value = "";
+    $("sign").value = "";
+    $("fullStr").textContent = "⚠ " + r.error;
+    return;
+  }
+  $("ts").value = r.ts;
+  $("nonce").value = r.nonce;
+  $("sign").value = r.sign;
+  $("fullStr").textContent =
+    "参与参数: " + r.paramsStr + "\n" +
+    "摘要输入: " + (r.fullStr.length > 300 ? r.fullStr.slice(0, 300) + "…" : r.fullStr);
+}
+
+/**
+ * 只刷新展示（输入变化时调用）
+ */
+function refreshTriple() {
+  const r = computeTriple();
+  renderTriple(r);
+  return r;
+}
+
+/**
+ * 构建请求：内部只计算一次三件套，并把该次结果同步显示，
+ * 保证"页面展示的 sign" 与 "实际发出的 sign" 完全一致
+ */
+function buildRequest() {
+  const r = computeTriple();
+  renderTriple(r);
+  if (r.error) return null;
+
+  const base = $("baseUrl").value.replace(/\/+$/, "");
+  let ep = currentEndpoint();
+  const ts = r.ts, nonce = r.nonce, sign = r.sign;
+  const appId = currentAppId();
+  const method = httpMethod();
+  // appId 通过请求头传递，不参与签名
+  const commonHeaders = { "X-Sign-App-Id": appId };
+
+  // 路径参数：用实际值替换 {goodsId}
+  const pathName = pathParamName();
+  let pathValue = null;
+  if (pathName) {
+    pathValue = r.params[pathName];
+    if (pathValue === undefined || pathValue === "") {
+      return null;
+    }
+    ep = ep.replace("{" + pathName + "}", encodeURIComponent(pathValue));
+  }
+  const url = base + ep;
+
+  // ---------- 参数模式（query / form） ----------
+  if (!isJsonMode()) {
+    const form = new URLSearchParams();
+    for (const k of Object.keys(r.params)) {
+      if (k === "sign") continue;
+      // 路径参数已放进 URL，不再重复作为 query
+      if (pathName && k === pathName) continue;
+      form.append(k, r.params[k]);
+    }
+    // 冻结时业务参数里没有三件套，需显式补上（模拟拦截后转发）
+    if (frozen || r.params.timestamp === undefined) {
+      form.set("timestamp", ts);
+      form.set("nonce", nonce);
+    }
+    form.set("sign", sign);
+
+    // 多值参数接口：额外补一个同名参数验证「取首值」行为
+    if (currentEndpoint() === "/demo/form/multi-value") {
+      form.append("tags", "b");
+    }
+
+    const query = form.toString();
+    if (isGetEndpoint()) {
+      return {
+        mode: "param", method: "GET", url: url + "?" + query,
+        contentType: "", headers: commonHeaders, body: "", sign, appId
+      };
+    }
+    return {
+      mode: "param", method: "POST", url,
+      contentType: "application/x-www-form-urlencoded",
+      headers: commonHeaders, body: query, sign, appId
+    };
+  }
+
+  // ---------- JSON 模式 ----------
+  return {
+    mode: "json", method,
+    url,
+    contentType: "application/json",
+    headers: Object.assign({}, commonHeaders,
+        { timestamp: ts, nonce: nonce, sign: sign }),
+    body: JSON.stringify(r.body, null, 2), sign, appId
+  };
+}
+
+function dumpRequest(req) {
+  if (!req) return;
+  let s = "";
+  s += req.method + " " + req.url + "\n";
+  for (const k of Object.keys(req.headers)) s += k + ": " + req.headers[k] + "\n";
+  if (req.contentType) s += "Content-Type: " + req.contentType + "\n";
+  if (req.body) s += "\n" + req.body;
+  $("reqDump").textContent = s;
+  lastRequest = req;
+}
+
+async function send() {
+  const req = buildRequest();
+  if (!req) return;
+  dumpRequest(req);
+
+  const t0 = performance.now();
+  $("statusBadge").className = "badge warn";
+  $("statusBadge").textContent = "请求中…";
+  $("respBody").textContent = "…";
+
+  try {
+    // 统一构造：方法、请求头（含 X-Sign-App-Id）、body 均由 buildRequest 决定
+    const headers = Object.assign({}, req.headers);
+    if (req.contentType) headers["Content-Type"] = req.contentType;
+
+    const init = { method: req.method, headers: headers };
+    if (req.body) init.body = req.body;
+
+    const resp = await fetch(req.url, init);
+    const text = await resp.text();
+    const ms = (performance.now() - t0).toFixed(0);
+    $("elapsed").textContent = ms + " ms";
+    $("statusBadge").className = "badge " + (resp.ok ? "ok" : "bad");
+    $("statusBadge").textContent = "HTTP " + resp.status;
+
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* 非 JSON 原样输出 */ }
+    $("respBody").textContent = pretty;
+  } catch (err) {
+    $("statusBadge").className = "badge bad";
+    $("statusBadge").textContent = "网络错误";
+    $("respBody").textContent =
+      "请求失败：" + err.message + "\n\n" +
+      "常见原因：\n" +
+      "1) 服务未启动 → mvn spring-boot:run\n" +
+      "2) 跨域被拦 → 本页面已随服务端资源一起部署时无此问题；\n" +
+      "   若用 file:// 直接打开，请用 http://localhost:8080/debug.html 访问\n" +
+      "3) 地址/端口不对 → 检查上方“服务地址”";
+  }
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(
+    () => { $("statusBadge").className = "badge ok"; $("statusBadge").textContent = "已复制"; },
+    () => alert("复制失败，请手动选中复制")
+  );
+}
+
+function toCurl(req) {
+  if (!req) return "";
+  let cmd = "curl -X POST '" + req.url + "'";
+  for (const k of Object.keys(req.headers)) cmd += " \\\n  -H '" + k + ": " + req.headers[k] + "'";
+  cmd += " \\\n  -H 'Content-Type: " + req.contentType + "'";
+  cmd += " \\\n  -d '" + req.body.replace(/'/g, "'\\''") + "'";
+  return cmd;
+}
+
+function toHttpFile(req) {
+  if (!req) return "";
+  let s = "### 由 apiSign 调试台生成\nPOST " + req.url + "\n";
+  for (const k of Object.keys(req.headers)) s += k + ": " + req.headers[k] + "\n";
+  s += "Content-Type: " + req.contentType + "\n\n" + req.body + "\n";
+  return s;
+}
+
+/* ---------------- 算法对照用例 ---------------- */
+const VECTORS = [
+  { name: "sa-token 官方锚点", params: { name: "zhang", age: "18", sex: "女" }, expect: "6f5e844a53e74363c2f6b24f64c4f0ff" },
+  { name: "扁平 body", params: { name: "nzxy", age: "18", timestamp: "1740000000000", nonce: "abc" }, expect: "e45dfa26fc9449536ec47ba037afdc37" },
+  { name: "嵌套展平", params: { "user.name": "nzxy", "user.age": "18", remark: "参与签名", timestamp: "1740000000000", nonce: "abc" }, expect: "ce710c8e9f881f2bac6cc26e390e432d" }
+];
+
+function verifyVectors() {
+  const key = "SwqFmsKxcbq23";
+  let out = "";
+  let pass = 0;
+  for (const v of VECTORS) {
+    const got = createSign(v.params, key, "md5").sign;
+    const ok = got === v.expect;
+    if (ok) pass++;
+    out += (ok ? "✅ " : "❌ ") + v.name + "\n";
+    out += "   expect: " + v.expect + "\n";
+    out += "   actual: " + got + "\n";
+  }
+  // HMAC 用例
+  const hmacParams = { name: "zhang", age: "18", sex: "女" };
+  const hmacGot = createSign(hmacParams, key, "hmac-sha256").sign;
+  const hmacExpect = "f2cb11bddf000a4c71f8bd280cab65a84d99f1b4c490a6fbbbe49fffec7203cb";
+  const hmacOk = hmacGot === hmacExpect;
+  if (hmacOk) pass++;
+  out += (hmacOk ? "✅ " : "❌ ") + "hmac-sha256 口径\n";
+  out += "   expect: " + hmacExpect + "\n";
+  out += "   actual: " + hmacGot + "\n";
+
+  // HMAC-MD5 用例
+  const hmd5Got = createSign(hmacParams, key, "hmac-md5").sign;
+  const hmd5Expect = "269c49e0541d24e9732895db2af7944d";
+  const hmd5Ok = hmd5Got === hmd5Expect;
+  if (hmd5Ok) pass++;
+  out += (hmd5Ok ? "✅ " : "❌ ") + "hmac-md5 口径\n";
+  out += "   expect: " + hmd5Expect + "\n";
+  out += "   actual: " + hmd5Got + "\n";
+
+  // 展平用例
+  const flat = flattenJson({ tags: ["a", "b"], n: 1.5, t: true, nil: null }, "", {});
+  const flatOk = JSON.stringify(flat) === JSON.stringify({ "tags[0]": "a", "tags[1]": "b", "n": "1.5", "t": "true" });
+  if (flatOk) pass++;
+  out += (flatOk ? "✅ " : "❌ ") + "展平规则（数组/浮点/布尔/null）\n";
+  out += "   actual: " + JSON.stringify(flat) + "\n";
+
+  $("vectors").textContent = out + "\n通过 " + pass + "/" + (VECTORS.length + 3);
+  $("selfTest").className = "badge " + (pass === VECTORS.length + 3 ? "ok" : "bad");
+  $("selfTest").textContent = pass === VECTORS.length + 3 ? "算法自检通过" : "算法自检失败";
+}
+
+/* ---------------- 主题切换 ---------------- */
+const THEME_KEY = "apisign-theme";
+const THEMES = ["light", "dark", "warm"];
+
+function applyTheme(theme) {
+  if (THEMES.indexOf(theme) === -1) theme = "light";
+  document.documentElement.setAttribute("data-theme", theme);
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* 隐私模式忽略 */ }
+  document.querySelectorAll(".theme-switch button").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.themeSet === theme);
+  });
+}
+
+function initTheme() {
+  let theme = "light";
+  try { theme = localStorage.getItem(THEME_KEY) || "light"; } catch (e) { /* ignore */ }
+  applyTheme(theme);
+}
+
+document.querySelectorAll(".theme-switch button").forEach(btn => {
+  btn.addEventListener("click", () => applyTheme(btn.dataset.themeSet));
+});
+
+/* ---------------- 事件绑定 ---------------- */
+$("btnSend").addEventListener("click", send);
+$("btnAddKv").addEventListener("click", () => { addKvRow("", ""); });
+$("btnFreeze").addEventListener("click", () => {
+  if (frozen) {
+    // 解除冻结
+    frozen = null;
+    $("freezeHint").style.display = "none";
+    $("btnFreeze").classList.add("ghost");
+    refreshTriple();
+    return;
+  }
+  // 先按当前参数算出一组合法签名，然后锁定
+  const r = computeTriple();
+  if (r.error) {
+    alert(r.error);
+    return;
+  }
+  frozen = { ts: r.ts, nonce: r.nonce, sign: r.sign,
+             paramsStr: r.paramsStr, fullStr: r.fullStr };
+  $("freezeHint").style.display = "block";
+  $("btnFreeze").textContent = "解除锁定";
+  refreshTriple();
+});
+
+// 重新生成签名时自动解除冻结
+$("btnResign").addEventListener("click", () => {
+  frozen = null;
+  $("freezeHint").style.display = "none";
+  $("btnFreeze").textContent = "锁定签名（模拟中间人篡改）";
+  refreshTriple();
+  dumpRequest(buildRequest());
+});
+$("btnCopyCurl").addEventListener("click", () => copyText(toCurl(lastRequest || buildRequest())));
+$("btnCopyHttp").addEventListener("click", () => copyText(toHttpFile(lastRequest || buildRequest())));
+$("btnVerify").addEventListener("click", verifyVectors);
+$("endpoint").addEventListener("change", () => {
+  // 切换接口时按需填充默认参数
+  const preset = ENDPOINT_PARAMS[currentEndpoint()];
+  if (preset) {
+    if (isJsonMode()) {
+      $("payload").value = JSON.stringify(preset, null, 2);
+    } else {
+      const kv = {};
+      Object.keys(preset).forEach(k => kv[k] = String(preset[k]));
+      setKvRows(kv);
+    }
+  }
+  updateModeHint();
+  refreshTriple();
+});
+
+// 切换 appId：联动密钥与算法，避免手工填错导致验签失败
+$("appId").addEventListener("change", () => {
+  const app = APPS[$("appId").value];
+  if (app) {
+    $("secretKey").value = app.secretKey;
+    $("algo").value = app.algo;
+  }
+  refreshTriple();
+});
+
+$("algo").addEventListener("change", refreshTriple);
+$("secretKey").addEventListener("input", refreshTriple);
+$("payload").addEventListener("input", refreshTriple);
+$("includeParams").addEventListener("change", refreshTriple);
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const p = PRESETS[btn.dataset.preset];
+    $("payload").value = JSON.stringify(p.body, null, 2);
+    // 参数模式编辑器同步填充（只取顶层标量，嵌套结构在参数模式下无意义）
+    const flatPreset = {};
+    Object.keys(p.body).forEach(k => {
+      const v = p.body[k];
+      if (v === null || typeof v !== "object") flatPreset[k] = String(v);
+    });
+    setKvRows(flatPreset);
+    $("endpoint").value = p.endpoint;
+    updateModeHint();
+    refreshTriple();
+  });
+});
+
+/* 初始化 */
+initTheme();
+setKvRows({ name: "nzxy", age: "18" });
+updateModeHint();
+verifyVectors();
+dumpRequest(buildRequest());
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.wxl52d41</groupId>
+        <artifactId>api-sign-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>api-sign-spring-boot-starter</artifactId>
+    <name>api-sign-spring-boot-starter</name>
+    <description>Spring Boot Starter：自动装配 @ApiSign 验签能力，支持多 appId</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.wxl52d41</groupId>
+            <artifactId>api-sign-core</artifactId>
+        </dependency>
+
+        <!-- 只依赖 web 与 jackson，不引入完整 starter-web 的传递依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!--
+            Redis 支持（用于 nonce 防重放的分布式存储，见 RedisNonceStore）
+            由 @ConditionalOnClass(StringRedisTemplate.class) 判断，宿主未引入 Spring Data Redis 时
+            本依赖不会激活任何 Bean，仍走默认的 MemoryNonceStore
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

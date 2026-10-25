@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.wxl52d41.apisign.starter.autoconfigure.ApiSignAutoConfiguration

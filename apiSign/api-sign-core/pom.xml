@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.wxl52d41</groupId>
+        <artifactId>api-sign-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>api-sign-core</artifactId>
+    <name>api-sign-core</name>
+    <description>签名算法核心：无 Spring 依赖，可单独用于客户端签名或任意框架</description>
+
+    <!--
+        纯算法模块：不引入任何 Spring / Web 依赖，
+        保证既能在服务端运行，也能被第三方以 jar 形式集成到自己的客户端。
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
