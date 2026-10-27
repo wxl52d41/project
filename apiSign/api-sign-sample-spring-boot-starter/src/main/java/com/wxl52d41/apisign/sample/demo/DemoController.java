@@ -155,6 +155,11 @@ public class DemoController {
         return signTemplate.createSign(signMap, app);
     }
 
+    /**
+     * 参数模式：query / form 表单参数签名
+     *
+     * 三件套（timestamp / nonce / sign）与业务参数一起作为表单字段提交
+     */
     @PostMapping("form-body")
     @ApiSign
     public Map<String, Object> formBody(String name, String age) {
@@ -162,32 +167,56 @@ public class DemoController {
         return result("param", "name", name, "age", age);
     }
 
+    /**
+     * JSON body 原文签名模式（默认）
+     *
+     * sign = digest(timestamp + "\n" + nonce + "\n" + body 原文)，
+     * 对标 Stripe / GitHub webhook：客户端不展平字段、不解析 JSON，
+     * 对实际发送的 body 字符串整体签名，任意语言零门槛接入
+     */
     @PostMapping("json-body")
     @ApiSign
     public Map<String, Object> jsonBody(@RequestBody Map<String, Object> body) {
         log.info("json-body:{}", body);
+        return result("json-raw", "body", body);
+    }
+
+    /**
+     * JSON body 展平签名模式
+     *
+     * body 字段展平为点号键（a.b / a[0]）后按字典序拼接签名，
+     * 支持 includeParams 字段级白名单，需要精细控制参与字段时使用
+     */
+    @PostMapping("json-body-flatten")
+    @ApiSign(bodyMode = ApiSign.BodyMode.FLATTEN)
+    public Map<String, Object> jsonBodyFlatten(@RequestBody Map<String, Object> body) {
+        log.info("json-body-flatten:{}", body);
         return result("json-flat", "body", body);
     }
 
+    /**
+     * JSON 嵌套结构（展平签名模式）：嵌套对象与数组展平后参与签名
+     */
     @PostMapping("json-nested")
-    @ApiSign
+    @ApiSign(bodyMode = ApiSign.BodyMode.FLATTEN)
     public Map<String, Object> jsonNested(@RequestBody Map<String, Object> body) {
         log.info("json-nested:{}", body);
         return result("json-nested", "body", body);
     }
 
     /**
-     * 仅 name / age 参与签名，otherParam 变更不影响验签
+     * 字段白名单（展平签名模式）：仅 name / age 参与签名，
+     * otherParam 变更不影响验签
      */
     @PostMapping("json-some-params")
-    @ApiSign(includeParams = {"name", "age"})
+    @ApiSign(includeParams = {"name", "age"}, bodyMode = ApiSign.BodyMode.FLATTEN)
     public Map<String, Object> jsonSomeParams(@RequestBody Map<String, Object> body) {
         log.info("json-some-params:{}", body);
         return result("json-include-params", "body", body);
     }
 
     /**
-     * 仅允许 thirdA 调用，用于验证接口级授权
+     * 接口级授权：仅允许 thirdA 调用（JSON body 原文签名）
      */
     @PostMapping("only-third-a")
     @ApiSign(appIds = {"thirdA"})

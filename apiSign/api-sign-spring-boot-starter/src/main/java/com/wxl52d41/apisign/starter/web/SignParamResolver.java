@@ -23,9 +23,10 @@ import java.util.Set;
 /**
  * 签名参数解析器：从请求中提取参与验签的参数集合
  *
- * 两种模式：
+ * 三种模式：
  * - 参数模式（Content-Type 非 application/json）：参数取 query / form，三件套也在参数中
- * - JSON body 模式（Content-Type = application/json）：业务参数取 body 并展平，三件套从 header 读取
+ * - JSON body 展平模式（Content-Type = application/json，默认）：业务参数取 body 并展平，三件套从 header 读取
+ * - JSON body 原文模式（@ApiSign(bodyMode = RAW)）：不解析 body，直接对 body 原文签名，三件套从 header 读取
  *
  * 内部使用独立的 ObjectMapper 解析 JSON，不注入宿主的 ObjectMapper，
  * 避免宿主自定义序列化规则（如数字精度、NULL 策略）导致展平口径漂移。
@@ -139,8 +140,8 @@ public class SignParamResolver {
         }
 
         // json body 模式：读取 body 并展平
+        String body = readBody(request);
         try {
-            String body = readBody(request);
             Map<String, String> map = new LinkedHashMap<>();
             if (SignUtil.isNotEmpty(body)) {
                 JsonNode root = objectMapper.readTree(body);
@@ -160,17 +161,28 @@ public class SignParamResolver {
 
     /**
      * 读取请求体字符串（依赖 RepeatableReadFilter 完成可重复读包装）
+     *
+     * 公开方法：body 原文签名模式（RAW）需要拿到与客户端发送字节完全一致的原文
+     *
+     * @param request 请求
+     * @return body 原文字符串，无 body 时返回空字符串
      */
-    private String readBody(HttpServletRequest request) throws IOException {
-        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        int n;
-        try (java.io.InputStream is = request.getInputStream()) {
-            while ((n = is.read(buffer)) != -1) {
-                baos.write(buffer, 0, n);
+    public String readBody(HttpServletRequest request) {
+        try {
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int n;
+            try (java.io.InputStream is = request.getInputStream()) {
+                while ((n = is.read(buffer)) != -1) {
+                    baos.write(buffer, 0, n);
+                }
             }
+            return new String(baos.toByteArray(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            SignException signException = new SignException("读取请求体失败：" + e.getMessage(), SignErrorCode.CODE_12206);
+            signException.initCause(e);
+            throw signException;
         }
-        return new String(baos.toByteArray(), StandardCharsets.UTF_8);
     }
 
     /**

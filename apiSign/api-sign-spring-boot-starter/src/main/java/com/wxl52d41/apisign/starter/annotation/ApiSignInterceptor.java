@@ -6,6 +6,7 @@ import com.wxl52d41.apisign.core.SignErrorCode;
 import com.wxl52d41.apisign.core.SignException;
 import com.wxl52d41.apisign.core.SignTemplate;
 import com.wxl52d41.apisign.core.SignUtil;
+import com.wxl52d41.apisign.starter.web.RepeatableReadFilter;
 import com.wxl52d41.apisign.starter.web.SignParamResolver;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -84,9 +85,45 @@ public class ApiSignInterceptor implements HandlerInterceptor {
             throw new SignException("appId 无权访问该接口：" + appId, SignErrorCode.CODE_12210);
         }
 
-        // 4. 解析参数并验签
+        // 4. 验签：JSON body 原文模式走独立分支，其余走参数 / 展平验签
+        if (apiSign.bodyMode() == ApiSign.BodyMode.RAW && RepeatableReadFilter.isJsonBody(request)) {
+            checkRawBodySign(request, app);
+            return true;
+        }
+
         Map<String, String> paramMap = signParamResolver.resolve(request, apiSign.includeParams());
         signTemplate.checkParamMap(paramMap, app);
         return true;
+    }
+
+    /**
+     * body 原文模式验签：sign = digest(timestamp + "\n" + nonce + "\n" + body 原文)
+     *
+     * 校验顺序与 checkParamMap 保持一致：三件套非空 → timestamp 窗口 → nonce 一次性 → sign 比对
+     *
+     * @param request 请求
+     * @param app     接入方配置
+     */
+    private void checkRawBodySign(HttpServletRequest request, SignApp app) {
+        // 三件套从 header 读取
+        String timestamp = request.getHeader(SignTemplate.timestamp);
+        String nonce = request.getHeader(SignTemplate.nonce);
+        String sign = request.getHeader(SignTemplate.sign);
+        SignException.notEmpty(timestamp, "缺少 timestamp 字段");
+        SignException.notEmpty(nonce, "缺少 nonce 字段");
+        SignException.notEmpty(sign, "缺少 sign 字段");
+
+        // timestamp 校验
+        signTemplate.checkTimestamp(signTemplate.parseTimestamp(timestamp), app);
+
+        // nonce 一次性校验
+        signTemplate.checkNonce(nonce, app);
+
+        // sign 比对：对 body 原文重算签名
+        String rawBody = signParamResolver.readBody(request);
+        String theSign = signTemplate.createBodySign(timestamp, nonce, rawBody, app);
+        if (!theSign.equals(sign)) {
+            throw new SignException("无效签名：" + sign, SignErrorCode.CODE_12202);
+        }
     }
 }

@@ -127,6 +127,41 @@ public class SignTemplate {
     }
 
     /**
+     * 创建 body 原文签名：对 timestamp + "\n" + nonce + "\n" + body 原文整体做摘要
+     *
+     * 对标 Stripe / GitHub webhook 的签名模式，不解析 body、不展平字段，
+     * 客户端只需对同一字符串做一次 HMAC / MD5 即可，任意语言零门槛接入。
+     * 三个要素用 \n 分隔，body 内即使含有 \n 也不会产生歧义
+     * （分隔符固定三段式，第三段总是完整 body 原文）。
+     *
+     * @param timestamp 13 位毫秒时间戳
+     * @param nonce     随机字符串
+     * @param rawBody   请求 body 原文字符串（须与服务端读到的字节完全一致）
+     * @param app       接入方配置（提供密钥与算法）
+     * @return 签名
+     */
+    public String createBodySign(String timestamp, String nonce, String rawBody, SignApp app) {
+        String secretKey = app.getSecretKey();
+        SignException.notEmpty(secretKey, "参与参数签名的秘钥不可为空", SignErrorCode.CODE_12201);
+
+        StringBuilder fullStr = new StringBuilder();
+        fullStr.append(timestamp).append('\n');
+        fullStr.append(nonce).append('\n');
+        if (rawBody != null) {
+            fullStr.append(rawBody);
+        }
+        // HMAC 模式：密钥参与 HMAC 运算，不拼接；非 HMAC 模式（md5/sha 等）：密钥拼接在末尾，
+        // 口径与 createSign 保持一致
+        String digestStr;
+        if (isHmac(app)) {
+            digestStr = fullStr.toString();
+        } else {
+            digestStr = fullStr + "&" + key + "=" + secretKey;
+        }
+        return digestFullStr(digestStr, app);
+    }
+
+    /**
      * 根据摘要算法名称分发计算
      *
      * @param digestAlgo 摘要算法

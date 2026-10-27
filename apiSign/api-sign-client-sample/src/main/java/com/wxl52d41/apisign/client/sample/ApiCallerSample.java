@@ -147,32 +147,46 @@ public class ApiCallerSample {
     // ==================================================================
 
     /**
-     * POST JSON body 调用
+     * POST JSON body 调用（默认：body 原文签名）
+     *
+     * 对标 Stripe / GitHub webhook：sign = digest(timestamp + "\n" + nonce + "\n" + body原文)，
+     * 不展平字段，body 只需传实际发送的字符串本身
      *
      * @param path     接口路径，如 /demo/json-body
-     * @param jsonBody JSON body 原文字符串
-     * @param bodyMap  与 jsonBody 内容一致的 Map（用于展平加签）
+     * @param jsonBody JSON body 原文字符串（签名与发送使用同一份，不可重新序列化）
      * @return 响应内容
      */
-    public String postJson(String path, String jsonBody, Map<String, ?> bodyMap) throws Exception {
-        // 1. 展平 body 后加签（嵌套结构 → a.b / a[0]）
-        SignClient.SignTrio trio = signClient.signJsonBody(bodyMap);
-
-        // 2. 三件套放请求头
-        HttpURLConnection conn = open(path, "POST");
-        conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-        for (Map.Entry<String, String> e : trio.toHeaders(signClient.getAppId()).entrySet()) {
-            conn.setRequestProperty(e.getKey(), e.getValue());
-        }
-        return write(conn, jsonBody);
+    public String postJson(String path, String jsonBody) throws Exception {
+        SignClient.SignTrio trio = signClient.signRawBody(jsonBody);
+        return sendJson(path, "POST", jsonBody, trio);
     }
 
     /**
-     * PUT JSON body 调用
+     * PUT JSON body 调用（默认：body 原文签名）
      */
-    public String putJson(String path, String jsonBody, Map<String, ?> bodyMap) throws Exception {
+    public String putJson(String path, String jsonBody) throws Exception {
+        SignClient.SignTrio trio = signClient.signRawBody(jsonBody);
+        return sendJson(path, "PUT", jsonBody, trio);
+    }
+
+    /**
+     * POST JSON body 调用（展平签名模式，仅服务端接口标注 bodyMode = FLATTEN 时使用）
+     *
+     * @param path     接口路径，如 /demo/json-body-flatten
+     * @param jsonBody JSON body 原文字符串（实际发送）
+     * @param bodyMap  与 jsonBody 内容一致的 Map（用于展平加签）
+     * @return 响应内容
+     */
+    public String postJsonFlatten(String path, String jsonBody, Map<String, ?> bodyMap) throws Exception {
         SignClient.SignTrio trio = signClient.signJsonBody(bodyMap);
-        HttpURLConnection conn = open(path, "PUT");
+        return sendJson(path, "POST", jsonBody, trio);
+    }
+
+    /**
+     * 发送 JSON 请求的公共逻辑：三件套放请求头，body 原样提交
+     */
+    private String sendJson(String path, String method, String jsonBody, SignClient.SignTrio trio) throws Exception {
+        HttpURLConnection conn = open(path, method);
         conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
         for (Map.Entry<String, String> e : trio.toHeaders(signClient.getAppId()).entrySet()) {
             conn.setRequestProperty(e.getKey(), e.getValue());

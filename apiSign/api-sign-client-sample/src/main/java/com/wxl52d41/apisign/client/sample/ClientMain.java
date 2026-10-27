@@ -34,24 +34,21 @@ public class ClientMain {
         queryOnly.put("name", "nzxy");
         System.out.println(caller.getWithPathVariable("/demo/form/path/", "goodsId", "G001", queryOnly));
 
-        System.out.println("\n=== 4. POST JSON（扁平）===");
+        System.out.println("\n=== 4. POST JSON（body 原文签名，默认）===");
         String json = "{\"name\":\"nzxy\",\"age\":18}";
+        System.out.println(caller.postJson("/demo/json-body", json));
+
+        System.out.println("\n=== 5. POST JSON（嵌套，body 原文签名）===");
+        String nestedJson = "{\"user\":{\"name\":\"nzxy\",\"age\":18},\"remark\":\"参与签名\"}";
+        System.out.println(caller.postJson("/demo/json-body", nestedJson));
+
+        System.out.println("\n=== 6. PUT JSON（body 原文签名）===");
+        System.out.println(caller.putJson("/demo/form/json-put", json));
+
+        System.out.println("\n=== 7. POST JSON（展平签名模式）===");
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "nzxy");
         body.put("age", 18);
-        System.out.println(caller.postJson("/demo/json-body", json, body));
-
-        System.out.println("\n=== 5. POST JSON（嵌套展平）===");
-        String nestedJson = "{\"user\":{\"name\":\"nzxy\",\"age\":18},\"remark\":\"参与签名\"}";
-        Map<String, Object> user = new LinkedHashMap<>();
-        user.put("name", "nzxy");
-        user.put("age", 18);
-        Map<String, Object> nested = new LinkedHashMap<>();
-        nested.put("user", user);
-        nested.put("remark", "参与签名");
-        System.out.println(caller.postJson("/demo/json-nested", nestedJson, nested));
-
-        System.out.println("\n=== 6. PUT JSON ===");
-        System.out.println(caller.putJson("/demo/form/json-put", json, body));
+        System.out.println(caller.postJsonFlatten("/demo/json-body-flatten", json, body));
     }
 }

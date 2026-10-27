@@ -33,4 +33,33 @@ public @interface ApiSign {
      * @return 参数名数组
      */
     String[] includeParams() default {};
+
+    /**
+     * JSON body 的签名模式（仅 Content-Type 为 application/json 时生效）：
+     * - RAW（默认）：body 原文签名，sign = digest(timestamp + "\n" + nonce + "\n" + body原文)，
+     *   对标 Stripe / GitHub webhook，客户端不依赖展平规则，任意语言零门槛接入
+     * - FLATTEN：展平 body 字段参与签名，支持 includeParams 字段级白名单
+     *
+     * 默认 RAW 的理由：市场主流（Stripe / GitHub / 微信 v3）均签 body 原文；
+     * 展平模式保留给需要字段级控制（includeParams）的内部对接场景
+     *
+     * FLATTEN 模式下 includeParams 才生效（RAW 签的是整体原文，无字段级控制）
+     *
+     * @return body 签名模式
+     */
+    BodyMode bodyMode() default BodyMode.RAW;
+
+    /**
+     * JSON body 签名模式枚举
+     */
+    enum BodyMode {
+        /**
+         * 展平模式：JSON 字段展平为点号键参与签名，支持字段级白名单
+         */
+        FLATTEN,
+        /**
+         * 原文模式：对 timestamp + "\n" + nonce + "\n" + body 原文整体签名
+         */
+        RAW
+    }
 }

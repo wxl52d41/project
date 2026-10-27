@@ -173,9 +173,10 @@
           <label>目标接口</label>
           <select id="endpoint">
             <option value="/demo/form-body">参数模式 /demo/form-body</option>
-            <option value="/demo/json-body" selected>JSON 扁平 /demo/json-body</option>
-            <option value="/demo/json-nested">JSON 嵌套 /demo/json-nested</option>
-            <option value="/demo/json-some-params">白名单 /demo/json-some-params</option>
+            <option value="/demo/json-body" selected>JSON 原文签名 /demo/json-body</option>
+            <option value="/demo/json-body-flatten">JSON 展平签名 /demo/json-body-flatten</option>
+            <option value="/demo/json-nested">JSON 嵌套(展平) /demo/json-nested</option>
+            <option value="/demo/json-some-params">白名单(展平) /demo/json-some-params</option>
             <option value="/demo/only-third-a">仅 thirdA /demo/only-third-a</option>
             <option value="/demo/form/query">GET query /demo/form/query</option>
             <option value="/demo/form/urlencoded">表单 /demo/form/urlencoded</option>
@@ -609,6 +610,17 @@ function isJsonMode() {
   return PARAM_MODE_ENDPOINTS.indexOf(currentEndpoint()) === -1;
 }
 
+// 服务端标注 bodyMode = FLATTEN 的接口，走展平签名；其余 JSON 接口默认 body 原文签名
+var FLATTEN_ENDPOINTS = [
+  "/demo/json-body-flatten",
+  "/demo/json-nested",
+  "/demo/json-some-params"
+];
+
+function isFlattenMode() {
+  return isJsonMode() && FLATTEN_ENDPOINTS.indexOf(currentEndpoint()) !== -1;
+}
+
 // PUT 接口需要用 PUT 方法
 function httpMethod() {
   return currentEndpoint() === "/demo/form/json-put" ? "PUT" : "POST";
@@ -665,11 +677,14 @@ function updateModeHint() {
     $("modeHint").innerHTML = '接口级授权：仅 <code>thirdA</code> 可访问，其他 appId 会返回 12210。';
     $("payloadHint").innerHTML = '切换上方 appId 为 thirdB 可验证越权拦截。';
   } else if (ep === "/demo/json-some-params") {
-    $("modeHint").innerHTML = 'JSON 模式 + 白名单：仅 <code>name/age</code> 参与签名，<code>otherParam</code> 可任意篡改。';
+    $("modeHint").innerHTML = '展平模式 + 白名单：仅 <code>name/age</code> 参与签名，<code>otherParam</code> 可任意篡改。';
     $("payloadHint").innerHTML = 'JSON body 原样提交，三件套走 header；仅 name/age 参与签名。';
+  } else if (ep === "/demo/json-body-flatten" || ep === "/demo/json-nested") {
+    $("modeHint").innerHTML = '展平模式：body 字段按 <code>a.b</code> / <code>a[0]</code> 展平后参与签名。';
+    $("payloadHint").innerHTML = 'JSON body 原样提交，三件套走 header；嵌套对象展平后参与签名。';
   } else {
-    $("modeHint").innerHTML = 'JSON 模式：body 扁平化后参与签名，三件套走 <code>header</code>。';
-    $("payloadHint").innerHTML = 'JSON body 原样提交，三件套走 header；嵌套对象会按 <code>a.b</code> 展平后参与签名。';
+    $("modeHint").innerHTML = 'JSON 原文签名（默认）：sign = digest(timestamp + "\\n" + nonce + "\\n" + body 原文)，对标 Stripe webhook。';
+    $("payloadHint").innerHTML = '签名与发送使用同一份 JSON 原文，不可重新格式化（改空白/重排 key 会验签失败）。';
   }
 }
 
@@ -754,7 +769,14 @@ function computeTriple() {
       return { error: "请求体必须是 JSON 对象（服务端会拒绝数组/标量）" };
     }
     body = parsed;
-    params = flattenJson(body, "", {});
+    if (isFlattenMode()) {
+      // 展平签名模式：字段展平为点号键参与签名
+      params = flattenJson(body, "", {});
+    } else {
+      // body 原文签名模式（默认）：对 timestamp + "\n" + nonce + "\n" + body 原文整体签名
+      // 注意：签名用文本框里的原文，发送也用同一份字符串，与服务端口径一致
+      params = null;
+    }
   } else {
     params = readKvRows();
     if (Object.keys(params).length === 0) {
@@ -781,6 +803,8 @@ function computeTriple() {
       ts: frozen.ts, nonce: frozen.nonce, sign: frozen.sign,
       paramsStr: frozen.paramsStr, fullStr: frozen.fullStr,
       params, body,
+      // RAW 模式冻结时，篡改后的 body 原文随请求发送但签名仍是旧值
+      rawBody: jsonMode && !isFlattenMode() ? $("payload").value : undefined,
       frozenNote: "签名已锁定，当前业务参数未参与本次签名计算"
     };
   }
@@ -788,10 +812,29 @@ function computeTriple() {
   // 补三件套（timestamp/nonce 参与签名）
   const ts = String(Date.now());
   const nonce = randomString(32);
+
+  let r;
+  if (jsonMode && !isFlattenMode()) {
+    // body 原文签名：sign = digest(ts + "\n" + nonce + "\n" + body 原文)
+    // 签名与发送都用文本框里的同一份字符串，避免重新序列化导致验签失败
+    const rawBody = $("payload").value;
+    const full = ts + "\n" + nonce + "\n" + rawBody;
+    if (algo && algo.indexOf("hmac-") === 0) {
+      r = { paramsStr: full, fullStr: full,
+            sign: (algo === "hmac-md5") ? hmacMd5(secretKey, full) : hmacSha256(secretKey, full) };
+    } else {
+      const fullKey = full + "&key=" + secretKey;
+      r = { paramsStr: full, fullStr: fullKey,
+            sign: (algo === "sha256") ? SHA256(fullKey) : MD5(fullKey) };
+    }
+    return { ts, nonce, sign: r.sign, paramsStr: r.paramsStr, fullStr: r.fullStr,
+             params, body, rawBody };
+  }
+
   params.timestamp = ts;
   params.nonce = nonce;
 
-  const r = createSign(params, secretKey, algo);
+  r = createSign(params, secretKey, algo);
   return { ts, nonce, sign: r.sign, paramsStr: r.paramsStr, fullStr: r.fullStr, params, body };
 }
 
@@ -888,13 +931,18 @@ function buildRequest() {
   }
 
   // ---------- JSON 模式 ----------
+  // RAW（默认）：body 原文签名，签名与发送必须是同一份字符串，不可重新序列化
+  // FLATTEN：展平签名与序列化无关，发送格式任意
+  const rawMode = !isFlattenMode();
   return {
     mode: "json", method,
     url,
     contentType: "application/json",
     headers: Object.assign({}, commonHeaders,
         { timestamp: ts, nonce: nonce, sign: sign }),
-    body: JSON.stringify(r.body, null, 2), sign, appId
+    body: rawMode ? r.rawBody : JSON.stringify(r.body, null, 2),
+    rawMode,
+    sign, appId
   };
 }
 

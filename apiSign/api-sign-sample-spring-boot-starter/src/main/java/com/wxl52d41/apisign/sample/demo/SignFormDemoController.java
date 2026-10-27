@@ -28,12 +28,22 @@ public class SignFormDemoController {
 
     private static final Logger log = LoggerFactory.getLogger(SignFormDemoController.class);
 
+    /**
+     * 参数模式：query 参数签名
+     *
+     * 三件套（timestamp / nonce / sign）与业务参数一起拼在 URL query 上
+     */
     @GetMapping("query")
     @ApiSign
     public Map<String, Object> query(@RequestParam String name, @RequestParam Integer age) {
         return result("query", "name", name, "age", age);
     }
 
+    /**
+     * 参数模式：urlencoded 表单签名
+     *
+     * 三件套与业务参数一起作为表单字段提交
+     */
     @PostMapping("urlencoded")
     @ApiSign
     public Map<String, Object> urlencoded(@RequestParam String name, @RequestParam Integer age) {
@@ -42,6 +52,8 @@ public class SignFormDemoController {
 
     /**
      * 路径参数同样参与验签，防止资源 ID 被篡改
+     *
+     * goodsId 从 URI 模板解析后并入签名参数集合
      */
     @GetMapping("path/{goodsId}")
     @ApiSign
@@ -51,6 +63,8 @@ public class SignFormDemoController {
 
     /**
      * 多值参数取首个值参与签名
+     *
+     * tags=a&tags=b 加签时按 tags=a 计算
      */
     @GetMapping("multi-value")
     @ApiSign
@@ -58,12 +72,22 @@ public class SignFormDemoController {
         return result("multi-value", "tags", tags);
     }
 
+    /**
+     * PUT + JSON body 原文签名（默认模式）
+     *
+     * 三件套走请求头，sign 覆盖 body 原文
+     */
     @PutMapping("json-put")
     @ApiSign
     public Map<String, Object> jsonPut(@RequestBody Map<String, Object> body) {
         return result("json-put", "body", body);
     }
 
+    /**
+     * 中文与特殊字符参数（参数模式）
+     *
+     * 签名计算用原始值，URL 传输时正常编码
+     */
     @GetMapping("chinese")
     @ApiSign
     public Map<String, Object> chinese(@RequestParam String name, @RequestParam String remark) {

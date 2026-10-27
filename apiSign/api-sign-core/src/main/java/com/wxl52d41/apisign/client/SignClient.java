@@ -85,6 +85,25 @@ public class SignClient {
     }
 
     /**
+     * 对 JSON body 原文加签：不展平、不解析，直接对 timestamp + "\n" + nonce + "\n" + body 原文签名
+     *
+     * 对标 Stripe / GitHub webhook 模式，任意语言零门槛。
+     * 关键：rawBody 必须是实际发送的 body 字符串本身，不能用 JSON 库重新序列化
+     * （重排 key、改空白都会导致验签失败）
+     *
+     * @param rawBody body 原文字符串
+     * @return 三件套
+     */
+    public SignTrio signRawBody(String rawBody) {
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String nonce = SignUtil.getRandomString(32);
+
+        // 客户端加签不需要 nonce 存储，传 null 即可（SignTemplate 仅在验签时访问）
+        String sign = new SignTemplate(null).createBodySign(timestamp, nonce, rawBody, app);
+        return new SignTrio(timestamp, nonce, sign);
+    }
+
+    /**
      * 直接计算签名（传入的参数需已包含 timestamp 与 nonce）
      *
      * @param params 已含三件套中 timestamp / nonce 的参数
