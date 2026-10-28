@@ -1,0 +1,31 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: api-key-sample
+  # ---------------------------------------------------------------------------
+  # Redis 连接配置（必需）：ApiKeyStore 固定使用 Redis 实现（RedisApiKeyStore），
+  # 数据存于 api-key:model:{apiKey} 与 api-key:index:{loginId}，多实例天然共享
+  # ---------------------------------------------------------------------------
+  redis:
+    host: 134.80.20.34
+    port: 6379
+    password: XMKFEB@2026
+    database: 0
+    timeout: 3000
+    lettuce:
+      pool:
+        max-active: 16
+        max-idle: 8
+        min-idle: 2
+
+api:
+  key:
+    enabled: true
+    # API Key 前缀
+    prefix: AK-
+    # API Key 有效期（秒），-1=永久有效，默认30天
+    timeout: 2592000
+    # 是否记录索引信息（按 loginId 反查 Key 列表）
+    is-record-index: true
